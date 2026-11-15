@@ -1,6 +1,6 @@
 package com.daw.bibliotecadigitalg4.service;
 
-import com.daw.bibliotecadigital.dto.LibroExternoDTO;
+import com.daw.bibliotecadigitalg4.dto.LibroExternoDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
