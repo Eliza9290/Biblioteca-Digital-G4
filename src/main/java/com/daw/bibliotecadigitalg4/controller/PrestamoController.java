@@ -59,8 +59,19 @@ public class PrestamoController {
     public ResponseEntity<PrestamoResumenDTO> buscarPorId(@PathVariable("id") Long id) {
         return ResponseEntity.ok(prestamoService.buscarPorId(id));
     }
-
-
+    @GetMapping("/{id}/libro")
+    @Operation(summary = "Préstamo con los datos reales del libro (mashup)",
+            description = "Junta los datos del préstamo guardados en H2 con la información del libro en Open Library "
+                    + "(título oficial, páginas, editorial, portada). La primera llamada consulta la API; las siguientes "
+                    + "salen de la caché RAM. Si Open Library no responde, devuelve el préstamo sin esos datos.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Préstamo con los datos del libro (o con los datos por defecto)"),
+            @ApiResponse(responseCode = "404", description = "No existe un préstamo con ese id",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<PrestamoMashupDTO> obtenerConLibro(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(prestamoService.obtenerPrestamoConLibro(id));
+    }
 
     @PostMapping
     @Operation(summary = "Crear préstamo", description = "Valida los datos y registra un préstamo nuevo.")
