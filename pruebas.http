@@ -1,0 +1,218 @@
+### Al arrancar con el perfil dev, DevDataInitializer carga 4 préstamos:
+### 1 PRE-001 "1984"                 → Ana (ana@correo.com)
+### 2 PRE-002 "Cien años de soledad" → Ana
+### 3 PRE-003 "Matar a un ruiseñor"  → Ana   (Ana ya tiene el máximo: 3 préstamos)
+### 4 PRE-004 "Fantástico Sr. Fox"   → Luis (luis@correo.com)
+### Ejecutad las peticiones en orden. Si reiniciáis la aplicación, los datos vuelven al estado inicial.
+
+### =====================================================
+### CASOS DE ÉXITO
+### =====================================================
+
+### 1. Listar todos (200 OK, los 4 precargados)
+GET http://localhost:8080/api/prestamos
+
+### 2. Filtrar por parte del título, sin mirar mayúsculas (200 OK)
+GET http://localhost:8080/api/prestamos?titulo=SOLEDAD
+
+### 3. Filtrar por socio (200 OK, los 3 de Ana)
+GET http://localhost:8080/api/prestamos?email=ana@correo.com
+
+### 4. Buscar por id (200 OK)
+GET http://localhost:8080/api/prestamos/1
+
+### 5. MASHUP + CACHÉ (1ª vez): llama a Open Library. Mirad el tiempo de respuesta y la consola
+GET http://localhost:8080/api/prestamos/1/libro
+
+### 6. MASHUP + CACHÉ (2ª vez): sale de la RAM, mucho más rápido y sin mensaje en consola
+GET http://localhost:8080/api/prestamos/1/libro
+
+### 7. Crear préstamo (201 Created, se le asigna el id 5)
+POST http://localhost:8080/api/prestamos
+Content-Type: application/json
+
+{
+  "codigo": "PRE-010",
+  "isbn": "9780307474728",
+  "tituloLibro": "Cien años de soledad",
+  "nombreSocio": "Marta Ruiz",
+  "emailSocio": "marta@correo.com",
+  "fianza": 12.50,
+  "fechaPrestamo": "2026-11-01",
+  "fechaDevolucion": "2027-06-30",
+  "aceptaNormas": true,
+  "generos": ["novela", "realismo mágico"]
+}
+
+### 8. INVALIDACIÓN DE CACHÉ: el POST anterior vació la caché, así que vuelve a llamar a Open Library
+GET http://localhost:8080/api/prestamos/1/libro
+
+### 9. Reemplazar completo con PUT (200 OK)
+PUT http://localhost:8080/api/prestamos/5
+Content-Type: application/json
+
+{
+  "codigo": "PRE-010",
+  "isbn": "9780451524935",
+  "tituloLibro": "1984",
+  "nombreSocio": "Marta Ruiz",
+  "emailSocio": "marta@correo.com",
+  "fianza": 15.00,
+  "fechaPrestamo": "2026-11-01",
+  "fechaDevolucion": "2027-06-30",
+  "aceptaNormas": true,
+  "generos": ["novela", "distopía"]
+}
+
+### 10. Ampliar solo la fecha de devolución con PATCH (200 OK, el resto no cambia)
+PATCH http://localhost:8080/api/prestamos/5
+Content-Type: application/json
+
+{
+  "fechaDevolucion": "2027-07-15"
+}
+
+### 11. Eliminar: el libro se ha devuelto (204 No Content, sin cuerpo)
+DELETE http://localhost:8080/api/prestamos/5
+
+### =====================================================
+### TOLERANCIA A FALLOS (FALLBACK)
+### =====================================================
+
+### 12. Crear un préstamo con un ISBN que no existe en Open Library (201, id 6)
+POST http://localhost:8080/api/prestamos
+Content-Type: application/json
+
+{
+  "codigo": "PRE-099",
+  "isbn": "9999999999999",
+  "tituloLibro": "Libro del fondo antiguo",
+  "nombreSocio": "Luis Pérez",
+  "emailSocio": "luis@correo.com",
+  "fianza": 5.00,
+  "fechaPrestamo": "2026-11-01",
+  "fechaDevolucion": "2027-06-30",
+  "aceptaNormas": true,
+  "generos": ["historia"]
+}
+
+### 13. Mashup de ese préstamo: Open Library no lo encuentra y la aplicación NO se cae
+###     (200 OK con "Datos del libro no disponibles"). Lo mismo pasa sin internet.
+GET http://localhost:8080/api/prestamos/6/libro
+
+### =====================================================
+### CASOS DE ERROR
+### =====================================================
+
+### 14. Buscar un id que no existe (404 Not Found)
+GET http://localhost:8080/api/prestamos/999
+
+### 15. Mashup de un id que no existe (404 Not Found)
+GET http://localhost:8080/api/prestamos/999/libro
+
+### 16. Validación fallida: varios campos mal (400 Bad Request con erroresCampo)
+POST http://localhost:8080/api/prestamos
+Content-Type: application/json
+
+{
+  "codigo": "pre1",
+  "isbn": "978-84",
+  "tituloLibro": "",
+  "nombreSocio": "Marta Ruiz",
+  "emailSocio": "esto-no-es-un-email",
+  "fianza": -5,
+  "fechaPrestamo": "2030-01-01",
+  "fechaDevolucion": "2020-01-01",
+  "aceptaNormas": false,
+  "generos": []
+}
+
+### 17. Código repetido: PRE-001 ya existe (409 Conflict, lo detecta el UNIQUE de la BD)
+POST http://localhost:8080/api/prestamos
+Content-Type: application/json
+
+{
+  "codigo": "PRE-001",
+  "isbn": "9780451524935",
+  "tituloLibro": "1984",
+  "nombreSocio": "Marta Ruiz",
+  "emailSocio": "marta@correo.com",
+  "fianza": 15.00,
+  "fechaPrestamo": "2026-11-01",
+  "fechaDevolucion": "2027-06-30",
+  "aceptaNormas": true,
+  "generos": ["novela"]
+}
+
+### 18. Regla de negocio: Ana ya tiene 3 préstamos y no puede llevarse otro (422 Unprocessable Entity)
+POST http://localhost:8080/api/prestamos
+Content-Type: application/json
+
+{
+  "codigo": "PRE-011",
+  "isbn": "9780140328721",
+  "tituloLibro": "Fantástico Sr. Fox",
+  "nombreSocio": "Ana García",
+  "emailSocio": "ana@correo.com",
+  "fianza": 8.00,
+  "fechaPrestamo": "2026-11-01",
+  "fechaDevolucion": "2027-06-30",
+  "aceptaNormas": true,
+  "generos": ["infantil"]
+}
+
+### 19. PATCH que pasa el préstamo de Luis a Ana: también supera el límite (422)
+PATCH http://localhost:8080/api/prestamos/4
+Content-Type: application/json
+
+{
+  "emailSocio": "ana@correo.com"
+}
+
+### 20. PATCH con email mal escrito (400)
+PATCH http://localhost:8080/api/prestamos/1
+Content-Type: application/json
+
+{
+  "emailSocio": "correo-mal"
+}
+
+### 21. PUT sobre un id que no existe (404)
+PUT http://localhost:8080/api/prestamos/999
+Content-Type: application/json
+
+{
+  "codigo": "PRE-999",
+  "isbn": "9780451524935",
+  "tituloLibro": "1984",
+  "nombreSocio": "Nadie",
+  "emailSocio": "nadie@correo.com",
+  "fianza": 10.00,
+  "fechaPrestamo": "2026-11-01",
+  "fechaDevolucion": "2027-06-30",
+  "aceptaNormas": true,
+  "generos": ["novela"]
+}
+
+### 22. PATCH sobre un id que no existe (404)
+PATCH http://localhost:8080/api/prestamos/999
+Content-Type: application/json
+
+{
+  "nombreSocio": "Nadie"
+}
+
+### 23. DELETE de un id que no existe (404)
+DELETE http://localhost:8080/api/prestamos/999
+
+### 24. JSON con fecha en formato incorrecto (400)
+POST http://localhost:8080/api/prestamos
+Content-Type: application/json
+
+{
+  "codigo": "PRE-050",
+  "fechaDevolucion": "30/06/2027"
+}
+
+### 25. Id que no es un número (400)
+GET http://localhost:8080/api/prestamos/abc
