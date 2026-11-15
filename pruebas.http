@@ -152,8 +152,8 @@ Content-Type: application/json
   "codigo": "PRE-011",
   "isbn": "9780140328721",
   "tituloLibro": "Fantástico Sr. Fox",
-  "nombreSocio": "Ana García",
-  "emailSocio": "ana@correo.com",
+  "nombreSocio": "Olivia García",
+  "emailSocio": "olivia@correo.com",
   "fianza": 8.00,
   "fechaPrestamo": "2026-11-01",
   "fechaDevolucion": "2027-06-30",
@@ -166,7 +166,7 @@ PATCH http://localhost:8080/api/prestamos/4
 Content-Type: application/json
 
 {
-  "emailSocio": "ana@correo.com"
+  "emailSocio": "olivia@correo.com"
 }
 
 ### 20. PATCH con email mal escrito (400)
