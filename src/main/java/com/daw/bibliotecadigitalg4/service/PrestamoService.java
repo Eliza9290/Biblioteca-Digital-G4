@@ -12,14 +12,26 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.daw.bibliotecadigitalg4.dto.LibroExternoDTO;
+import com.daw.bibliotecadigitalg4.dto.PrestamoMashupDTO;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PrestamoService {
 
+    public static final String CACHE_MASHUP = "prestamos-libro";
     public static final int MAX_PRESTAMOS_POR_SOCIO = 3;
+    public static final String FUENTE_OPEN_LIBRARY = "Open Library API (tiempo real)";
+    public static final String FUENTE_NO_DISPONIBLE = "Datos del libro no disponibles: Open Library no responde";
+    private static final String URL_PORTADA = "https://covers.openlibrary.org/b/isbn/%s-M.jpg";
 
     private final PrestamoRepository prestamoRepository;
+    private final ExternalApiService externalApiService;
 
     public List<PrestamoResumenDTO> listar(String titulo, String emailSocio) {
         List<Prestamo> prestamos;
@@ -37,6 +49,27 @@ public class PrestamoService {
         return aResumenDTO(obtenerEntidad(id));
     }
 
+    @Cacheable(value = CACHE_MASHUP, key = "#id", unless = "#result.tituloOficial == null")
+    public PrestamoMashupDTO obtenerPrestamoConLibro(Long id) {
+        log.info("--> [SERVICIO] Petición REAL a Open Library para el préstamo {}", id);
+        Prestamo prestamo = obtenerEntidad(id);
+        Optional<LibroExternoDTO> libro = externalApiService.obtenerDatosLibro(prestamo.getIsbn());
+
+        return new PrestamoMashupDTO(
+                prestamo.getId(),
+                prestamo.getCodigo(),
+                prestamo.getIsbn(),
+                prestamo.getNombreSocio(),
+                prestamo.getFechaDevolucion(),
+                libro.map(LibroExternoDTO::getTitle).orElse(null),
+                libro.map(LibroExternoDTO::getNumberOfPages).orElse(null),
+                libro.map(LibroExternoDTO::getPublishDate).orElse(null),
+                libro.map(this::primeraEditorial).orElse(null),
+                libro.isPresent() ? String.format(URL_PORTADA, prestamo.getIsbn()) : null,
+                libro.isPresent() ? FUENTE_OPEN_LIBRARY : FUENTE_NO_DISPONIBLE);
+    }
+
+    @CacheEvict(value = CACHE_MASHUP, allEntries = true)
     public PrestamoResumenDTO crear(PrestamoCreacionDTO dto) {
         validarLimitePrestamos(dto.getEmailSocio());
         Prestamo prestamo = new Prestamo();
@@ -44,6 +77,7 @@ public class PrestamoService {
         return aResumenDTO(prestamoRepository.save(prestamo));
     }
 
+    @CacheEvict(value = CACHE_MASHUP, allEntries = true)
     public PrestamoResumenDTO reemplazar(Long id, PrestamoCreacionDTO dto) {
         Prestamo prestamo = obtenerEntidad(id);
         if (cambiaDeSocio(prestamo, dto.getEmailSocio())) {
@@ -53,6 +87,7 @@ public class PrestamoService {
         return aResumenDTO(prestamoRepository.saveAndFlush(prestamo));
     }
 
+    @CacheEvict(value = CACHE_MASHUP, allEntries = true)
     public PrestamoResumenDTO modificarParcial(Long id, PrestamoPatchDTO dto) {
         Prestamo prestamo = obtenerEntidad(id);
         if (dto.getEmailSocio() != null) {
@@ -77,6 +112,7 @@ public class PrestamoService {
         return aResumenDTO(prestamoRepository.saveAndFlush(prestamo));
     }
 
+    @CacheEvict(value = CACHE_MASHUP, allEntries = true)
     public void eliminar(Long id) {
         Prestamo prestamo = obtenerEntidad(id);
         prestamoRepository.delete(prestamo);
@@ -97,6 +133,11 @@ public class PrestamoService {
 
     private boolean cambiaDeSocio(Prestamo prestamo, String nuevoEmail) {
         return !prestamo.getEmailSocio().equalsIgnoreCase(nuevoEmail);
+    }
+
+    private String primeraEditorial(LibroExternoDTO libro) {
+        List<String> editoriales = libro.getPublishers();
+        return (editoriales == null || editoriales.isEmpty()) ? null : editoriales.get(0);
     }
 
     private void copiarDatos(PrestamoCreacionDTO dto, Prestamo prestamo) {
