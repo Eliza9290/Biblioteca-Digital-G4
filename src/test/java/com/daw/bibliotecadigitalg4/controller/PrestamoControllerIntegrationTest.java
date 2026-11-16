@@ -1,5 +1,7 @@
 package com.daw.bibliotecadigitalg4.controller;
 
+import com.daw.bibliotecadigitalg4.dto.PrestamoCreacionDTO;
+import com.daw.bibliotecadigitalg4.dto.PrestamoPatchDTO;
 import com.daw.bibliotecadigitalg4.model.Prestamo;
 import com.daw.bibliotecadigitalg4.repository.PrestamoRepository;
 import tools.jackson.databind.ObjectMapper;
@@ -17,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -42,10 +45,21 @@ public class PrestamoControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET de la lista sin datos devuelve 200 y un array vacío")
+    void listarVacio() throws Exception {
+
+        mockMvc.perform(get("/api/prestamos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("POST válido devuelve 201 y el préstamo creado")
     void crearPrestamoValido() throws Exception {
 
-        String json = objectMapper.writeValueAsString(prestamoValido());
+        String json = objectMapper.writeValueAsString(
+                prestamoCreacionDTO("PRE-010", "marta@correo.com")
+        );
 
         mockMvc.perform(post("/api/prestamos")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -60,11 +74,11 @@ public class PrestamoControllerIntegrationTest {
     @DisplayName("POST con datos no válidos devuelve 400 y los errores por campo")
     void crearPrestamoNoValido() throws Exception {
 
-        Prestamo prestamo = prestamoValido();
-        prestamo.setCodigo("P10");
-        prestamo.setEmailSocio("sin-arroba");
+        PrestamoCreacionDTO dto = prestamoCreacionDTO("PRE-010", "marta@correo.com");
+        dto.setCodigo("P10");
+        dto.setEmailSocio("sin-arroba");
 
-        String json = objectMapper.writeValueAsString(prestamo);
+        String json = objectMapper.writeValueAsString(dto);
 
         mockMvc.perform(post("/api/prestamos")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -79,11 +93,11 @@ public class PrestamoControllerIntegrationTest {
     @DisplayName("POST con código repetido devuelve 409")
     void crearPrestamoDuplicado() throws Exception {
 
-        prestamoRepository.save(
-                prestamoDePrueba("PRE-010", "luis@correo.com")
-        );
+        prestamoRepository.save(prestamoDePrueba("PRE-010", "luis@correo.com"));
 
-        String json = objectMapper.writeValueAsString(prestamoValido());
+        String json = objectMapper.writeValueAsString(
+                prestamoCreacionDTO("PRE-010", "marta@correo.com")
+        );
 
         mockMvc.perform(post("/api/prestamos")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -95,19 +109,13 @@ public class PrestamoControllerIntegrationTest {
     @DisplayName("POST para un socio que ya tiene 3 préstamos devuelve 422")
     void crearSuperaLimite() throws Exception {
 
-        prestamoRepository.save(
-                prestamoDePrueba("PRE-001", "marta@correo.com")
-        );
+        prestamoRepository.save(prestamoDePrueba("PRE-001", "marta@correo.com"));
+        prestamoRepository.save(prestamoDePrueba("PRE-002", "marta@correo.com"));
+        prestamoRepository.save(prestamoDePrueba("PRE-003", "marta@correo.com"));
 
-        prestamoRepository.save(
-                prestamoDePrueba("PRE-002", "marta@correo.com")
+        String json = objectMapper.writeValueAsString(
+                prestamoCreacionDTO("PRE-010", "marta@correo.com")
         );
-
-        prestamoRepository.save(
-                prestamoDePrueba("PRE-003", "marta@correo.com")
-        );
-
-        String json = objectMapper.writeValueAsString(prestamoValido());
 
         mockMvc.perform(post("/api/prestamos")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -134,7 +142,49 @@ public class PrestamoControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("DELETE de un préstamo existente devuelve 204 y lo borra de la BD")
+    @DisplayName("PUT de un préstamo existente devuelve 200 y reemplaza sus datos")
+    void reemplazarPrestamo() throws Exception {
+
+        Prestamo guardado = prestamoRepository.save(
+                prestamoDePrueba("PRE-040", "luis@correo.com")
+        );
+
+        PrestamoCreacionDTO dto = prestamoCreacionDTO("PRE-040", "luis@correo.com");
+        dto.setTituloLibro("Cien años de soledad");
+
+        mockMvc.perform(put("/api/prestamos/{id}", guardado.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.codigo").value("PRE-040"));
+
+        Prestamo enBd = prestamoRepository.findById(guardado.getId()).orElseThrow();
+        assertThat(enBd.getTituloLibro()).isEqualTo("Cien años de soledad");
+    }
+
+    @Test
+    @DisplayName("PATCH cambia solo el campo enviado y devuelve 200")
+    void modificarParcialPrestamo() throws Exception {
+
+        Prestamo guardado = prestamoRepository.save(
+                prestamoDePrueba("PRE-050", "luis@correo.com")
+        );
+
+        PrestamoPatchDTO patch = new PrestamoPatchDTO();
+        patch.setFianza(25.0);
+
+        mockMvc.perform(patch("/api/prestamos/{id}", guardado.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(patch)))
+                .andExpect(status().isOk());
+
+        Prestamo enBd = prestamoRepository.findById(guardado.getId()).orElseThrow();
+        assertThat(enBd.getFianza()).isEqualTo(25.0);
+        assertThat(enBd.getTituloLibro()).isEqualTo("1984");
+    }
+
+    @Test
+    @DisplayName("DELETE de un préstamo existente devuelve 204 vacío y lo borra de la BD")
     void eliminarPrestamo() throws Exception {
 
         Prestamo guardado = prestamoRepository.save(
@@ -142,24 +192,33 @@ public class PrestamoControllerIntegrationTest {
         );
 
         mockMvc.perform(delete("/api/prestamos/{id}", guardado.getId()))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
 
         mockMvc.perform(get("/api/prestamos/{id}", guardado.getId()))
                 .andExpect(status().isNotFound());
     }
 
-    private Prestamo prestamoValido() {
+    // DTO que el cliente envía a la API (lo que viaja por HTTP)
+    private PrestamoCreacionDTO prestamoCreacionDTO(String codigo, String email) {
 
-        Prestamo prestamo = prestamoDePrueba(
-                "PRE-010", "marta@correo.com"
-        );
+        PrestamoCreacionDTO dto = new PrestamoCreacionDTO();
 
-        prestamo.setIsbn("9780307474728");
-        prestamo.setTituloLibro("Cien años de soledad");
+        dto.setCodigo(codigo);
+        dto.setIsbn("9780307474728");
+        dto.setTituloLibro("Cien años de soledad");
+        dto.setNombreSocio("Socio de prueba");
+        dto.setEmailSocio(email);
+        dto.setFianza(15.0);
+        dto.setFechaPrestamo(LocalDate.now());
+        dto.setFechaDevolucion(LocalDate.now().plusDays(21));
+        dto.setAceptaNormas(true);
+        dto.setGeneros(List.of("novela", "realismo mágico"));
 
-        return prestamo;
+        return dto;
     }
 
+    // Entidad que se guarda directamente en la BD para preparar datos (no pasa por HTTP)
     private Prestamo prestamoDePrueba(String codigo, String email) {
 
         Prestamo prestamo = new Prestamo();
@@ -177,7 +236,4 @@ public class PrestamoControllerIntegrationTest {
 
         return prestamo;
     }
-
-
-
 }
