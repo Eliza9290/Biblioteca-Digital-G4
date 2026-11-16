@@ -1,7 +1,7 @@
 ### Al arrancar con el perfil dev, DevDataInitializer carga 4 préstamos:
 ### 1 PRE-001 "1984"                 → Ana (ana@correo.com)
 ### 2 PRE-002 "Cien años de soledad" → Ana
-### 3 PRE-003 "Matar a un ruiseñor"  → Ana   (Ana ya tiene el máximo: 3 préstamos)
+### 3 PRE-003 "Matar a un ruiseñor"  → Ana (ana  ya tiene el máximo: 3 préstamos)
 ### 4 PRE-004 "Fantástico Sr. Fox"   → Luis (luis@correo.com)
 ### Ejecutad las peticiones en orden. Si reiniciáis la aplicación, los datos vuelven al estado inicial.
 
