@@ -4,9 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.Generated;
 import lombok.NoArgsConstructor;
-
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,10 +58,9 @@ public class Prestamo {
     @Schema(description = "El socio acepta las normas de la biblioteca", example = "true")
     private Boolean aceptaNormas;
 
-    @ElementCollection(fetch = FetchType.EAGER)  //Segunda tabla
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "prestamo_generos", joinColumns = @JoinColumn(name = "prestamo_id"))
     @Column(name = "genero", length = 60)
-    @Schema(description = "Géneros del libro", example = "[\"novela\", \"distopía\"]") //["novela", "distopía"]
+    @Schema(description = "Géneros del libro", example = "[\"novela\", \"distopía\"]")
     private List<String> generos = new ArrayList<>();
-
 }
