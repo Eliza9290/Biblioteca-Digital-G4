@@ -1,6 +1,8 @@
 package com.daw.bibliotecadigitalg4.service;
 
 import com.daw.bibliotecadigitalg4.dto.PrestamoCreacionDTO;
+import com.daw.bibliotecadigitalg4.dto.LibroExternoDTO;
+import com.daw.bibliotecadigitalg4.dto.PrestamoMashupDTO;
 import com.daw.bibliotecadigitalg4.dto.PrestamoResumenDTO;
 import com.daw.bibliotecadigitalg4.exception.RecursoNoEncontradoException;
 import com.daw.bibliotecadigitalg4.exception.ReglaNegocioException;
@@ -30,6 +32,9 @@ class PrestamoServiceUnitTest {
 
     @Mock
     private PrestamoRepository prestamoRepository;
+
+    @Mock
+    private ExternalApiService externalApiService;
 
     @InjectMocks
     private PrestamoService prestamoService;
@@ -114,5 +119,39 @@ class PrestamoServiceUnitTest {
                 .isInstanceOf(RecursoNoEncontradoException.class);
 
         verify(prestamoRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("mashup junta los datos de la BD con los del libro de Open Library")
+    void mashupConDatosDelLibro() {
+        LibroExternoDTO libro = new LibroExternoDTO();
+        libro.setTitle("Nineteen Eighty-Four");
+        libro.setNumberOfPages(328);
+        libro.setPublishDate("1961");
+        libro.setPublishers(List.of("Signet Classics"));
+        when(prestamoRepository.findById(1L)).thenReturn(Optional.of(prestamo()));
+        when(externalApiService.obtenerDatosLibro("9780451524935")).thenReturn(Optional.of(libro));
+
+        PrestamoMashupDTO resultado = prestamoService.obtenerPrestamoConLibro(1L);
+
+        assertThat(resultado.getNombreSocio()).isEqualTo("Ana García");
+        assertThat(resultado.getTituloOficial()).isEqualTo("Nineteen Eighty-Four");
+        assertThat(resultado.getNumeroPaginas()).isEqualTo(328);
+        assertThat(resultado.getEditorial()).isEqualTo("Signet Classics");
+        assertThat(resultado.getFuenteDatos()).isEqualTo(PrestamoService.FUENTE_OPEN_LIBRARY);
+    }
+
+    @Test
+    @DisplayName("mashup devuelve los datos por defecto si la API no responde (fallback)")
+    void mashupSinApi() {
+        when(prestamoRepository.findById(1L)).thenReturn(Optional.of(prestamo()));
+        when(externalApiService.obtenerDatosLibro("9780451524935")).thenReturn(Optional.empty());
+
+        PrestamoMashupDTO resultado = prestamoService.obtenerPrestamoConLibro(1L);
+
+        assertThat(resultado.getCodigo()).isEqualTo("PRE-001");
+        assertThat(resultado.getTituloOficial()).isNull();
+        assertThat(resultado.getPortadaUrl()).isNull();
+        assertThat(resultado.getFuenteDatos()).isEqualTo(PrestamoService.FUENTE_NO_DISPONIBLE);
     }
 }
